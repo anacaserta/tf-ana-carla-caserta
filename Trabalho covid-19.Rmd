@@ -1,0 +1,175 @@
+---
+title:  "Casos e óbitos por COVID 19 na cidade de Bauru"
+author: "Ana Carla Caserta RA: 171.024.869"
+date: "16/03/2022"
+output:
+  html_document: default
+  'html_document: default': default
+---
+<b> Introducao a análise exploratória de dados </b>
+
+
+<p><b> Importando bibliotecas: </b> </p>
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(plotly)
+library(ggrepel)
+library(PerformanceAnalytics)
+library(reshape2)
+library(readxl)
+library("bbl")
+library("ggQC")
+library(rmarkdown)
+```
+
+<p><b> Importando os dados. </b> </p>
+
+```{r message=FALSE, warning=FALSE}
+table_casosbauru_geral <- read_delim("../dados/covid_19_bauru_casos_geral.csv",delim = ";")
+table_casosbauru_mortes <- read_delim("../dados/covid_19_bauru_mortes.csv",delim = ";")
+```
+
+<p><b> Variáveis: </b> </p>
+
+<p><b> table_casosbauru_geral: </b> </p>
+
+<b> data_boletim </b>: data de publicação do boletim epidemiológico. Formato dd/mm/aa. Variável continua. 
+<b> casos_novos </b>: número de novas infecções declaradas. Variável contínua.
+<b> confirmacoes_total </b>: Número total de casos novos detectados de Covid-19 até a data. Variável contínua.
+<b> total_mortes </b>: Número total de óbitos de Covid-19 até a data. Variável contínua.
+<b> mortes_suspeitas </b>: Número total de óbitos ocorridos até a data suspeitos se Covid-19 ou não. Variável contínua.
+<b> aguardando_resultado </b>: Número total de exames de Covid-19 aguardando confirmação até a data. Variável contínua.
+<b> curados </b>: Número total de pessoas que tiveram Covid-19 e estão curadas até a data.Variável contínua.
+<b> negativos </b>: Número total de pessoas que tiveram resultado negativo de exame de Covid-19 até a data. Variável contínua.
+<b> vagas_uti_HE </b>: Número de vagas de UTI oferecidas no hospital municipal dedicadas à covid para pacientes de Bauru. Variável contínua.
+<b> vagas_uti_HE_ocupadas </b>: Número de leitos de UTI ocupados no hospital municipal dedicadas à covid. Variável contínua.
+<b> vagas_uti_regiao </b>: Número de vagas de UTI oferecidas no hospital de referência regional dedicadas à covid para pacientes das cidades da região de Bauru.Variável contínua.
+<b> vagas_uti_regiao_ocupada </b>: Número de leitos de UTI ocupados no hospital de referência regional dedicadas à covid para pacientes das cidades da região de Bauru.Variável contínua.
+<b> mortes_espera_uti </b>: Número de óbitos ocorridos em fila de espera para internação de covid-19. Variável contínua.
+
+
+<p><b> table_casosbauru_mortes: </b> </p>
+
+<b> data_boletim </b>: data de publicação do boletim epidemiológico. Formato dd/mm/aa.  Variável contínua. 
+<b> sexo </b>: gênero do paciente. Categorias: masculino/feminino.  Variável qualitativa Nominal. 
+<b> idade </b>: idade do paciente. Variável continua em anos.
+<b> inicio_sintoma </b>: data de início dos sintomas da síndrome respiratória aguda grave (SRAG). Formato dd/mm/aa.  Variável qualitativa Nominal. 
+<b> tipo_hosp </b>: tipo de hospital. Categorias: público / privado.  Variável qualitativa Nominal. 
+<b> comorbidade </b>: doenças graves do paciente. Texto com as doenças preexistentes separadas pela conjunção "e".  Variável qualitativa Nominal. 
+<b> data_obito </b>: data declarada do óbito do paciente. Formato dd/mm/aa.  Variável qualitativa Nominal. 
+<b> doses_vacina </b>: número de doses tomadas pelo paciente até a data de óbito. Variável qualitativa Nominal. 
+
+<h3><b> 1) Análise do número de óbitos: distribuição de acordo com a idade dos pacientes. </b></h3>
+
+Para mensuração do número de óbitos em relação a idade da população o ROL apresentado
+foi dividido em faixas etárias de 9 em 9 anos. 
+```{r message=FALSE, warning=FALSE}
+k <- nclass.Sturges(table_casosbauru_mortes$idade)
+AT <- max(table_casosbauru_mortes$idade[complete.cases(table_casosbauru_mortes$idade)]) - min(table_casosbauru_mortes$idade[complete.cases(table_casosbauru_mortes$idade)]) 
+h <- ceiling(AT/k)
+infclass <- min(table_casosbauru_mortes$idade[complete.cases(table_casosbauru_mortes$idade)]) 
+supclass <- infclass + (k * h)
+brk <- seq(infclass,supclass,h)
+
+frequencia <- table(cut(table_casosbauru_mortes$idade[complete.cases(table_casosbauru_mortes$idade)], breaks = brk, right = FALSE))
+
+
+hist(table_casosbauru_mortes$idade[complete.cases(table_casosbauru_mortes$idade)],  
+     main = "Mortes por COVID em Bauru - Distribuição por faixa etária", 
+     xlab = "Idade", ylab = "Nº de mortes", 
+     col = c("salmon"), 
+     border = c("salmon"),
+     breaks = brk,
+     right = FALSE,
+     axes = FALSE
+     )
+axis(1, at=seq(infclass,supclass,h))
+axis(2, at=seq(0,max(frequencia),2))
+
+```
+
+Observa-se que o número de casos de óbito por COVID-19 em Bauru atingiu principalmente a população idosa, entre 54 e 90 anos. 
+
+<h3><b> 2) Análise do número de óbitos: características das comorbidades dos óbitos. </b> </h3>
+
+Foi necessária a segregação em 10 das pricipais caracteríscas, podendo-se oberservar que: obesidade, cardiopatia, hipertensão e diabetes são as 4 características mais citadas. 
+
+```{r message=FALSE, warning=FALSE}
+x <- c(table_casosbauru_mortes$comorbidade[complete.cases(table_casosbauru_mortes$comorbidade)])
+t <- strsplit(x," e ")
+d <- unlist(t)
+tabela <- as.data.frame(table(d))
+tabela <- tabela[with(tabela,order(-Freq)),]
+tabela <- tabela[1:10,]
+pie(tabela$Freq, labels = tabela$d)
+```
+
+
+<h3><b> 3) Análise do número de óbitos: periodicidade de tais óbitos </b> </h3>
+
+```{r message=FALSE, warning=FALSE}
+data_morte <- as.Date(table_casosbauru_mortes$data_obito[complete.cases(table_casosbauru_mortes$data_obito)], format = "%d/%m/%Y")
+df <- as.data.frame(table(data_morte))
+df$data_morte <- as.Date(df$data_morte)
+df_ano <- df %>% mutate(year = format(data_morte, "%Y")) %>% 
+  group_by(year) %>% summarise(total = sum(Freq))
+df_anos <- df %>% mutate(month = format(data_morte, "%m"), year = format(data_morte, "%Y")) %>% 
+  group_by(month,year) %>% summarise(total = sum(Freq))
+df_2020 <- filter(df_anos, year == 2020)
+df_2021 <- filter(df_anos, year == 2021)
+df_2022 <- filter(df_anos, year == 2022)
+df_geral <- c(df_2020,df_2021,df_2022)
+
+df_ano <- df_ano %>%  filter(year >= 2020)
+
+ggplot(data = df_ano) +
+  geom_col(aes(y = total, x = year)) +
+  ggtitle(paste("Total de casos anuais")) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(data = df_2020) +
+  geom_col(aes(y = total, x = month)) +
+  ggtitle(paste("Total de casos mensais: 2020")) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(data = df_2021) +
+  geom_col(aes(y = total, x = month)) +
+  ggtitle(paste("Total de casos mensais: 2021")) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(data = df_2022) +
+  geom_col(aes(y = total, x = month)) +
+  ggtitle(paste("Total de casos mensais: 2022")) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+Analisando os gráficos gerados, observa-se que o ano de 2021 obteve o ápice do número de casos de COVID-19 em Bauru, principalmente entre os meses de março à julho. É possível observar também o decaimento desse número devido ao número crescente de vacinações, apresentado também nesse análise.
+
+
+<h3><b> 4) Análise do número de óbitos e vacinados. </b> </h3>
+
+```{r message=FALSE, warning=FALSE}
+table_mortes_vacinados <- table_casosbauru_mortes %>% select("data_obito")
+table_mortes_vacinados$data_obito <- as.Date(table_mortes_vacinados$data_obito, format = "%d/%m/%Y")
+table_mortes_vacinados <- table_mortes_vacinados %>% mutate(caso = 1) %>% 
+mutate(month_year = as.yearmon(data_obito)) %>% group_by(month_year) %>% summarise(total = sum(caso, na.rm = TRUE)) 
+table_mortes_vacinados <- table_mortes_vacinados %>% filter (month_year > 2020)
+
+table_mortes_vacinados2 <- table_casosbauru_mortes %>%  filter( doses_vacina != 0) %>%  select("data_obito")
+table_mortes_vacinados2$data_obito <- as.Date(table_mortes_vacinados2$data_obito, format = "%d/%m/%Y")
+table_mortes_vacinados2 <- table_mortes_vacinados2 %>% mutate(caso = 1) %>% 
+mutate(month_year = as.yearmon(data_obito)) %>% group_by(month_year) %>% summarise(total = sum(caso, na.rm = TRUE)) 
+table_mortes_vacinados2 <- table_mortes_vacinados2 %>% filter (month_year > 2020)
+
+ggplot(NULL) +
+  geom_col(data = table_mortes_vacinados, aes(y = total, x = month_year)) +
+  geom_col(data = table_mortes_vacinados2, aes(x = month_year, y = total), colour="red") 
+  
+```
+
+
+A conclusão da análise não é totalmente consistente, seria necessário uma base de dados com a quantidade total de vacinados por período em relação a população. Ainda assim, é possível observar uma considerável queda no número de óbitos por COVID-19 devido a vacina e também aos cuidados preventivos. 
+
+  
